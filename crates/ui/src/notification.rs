@@ -70,8 +70,8 @@ pub struct Notification {
     message: Option<SharedString>,
     icon: Option<Icon>,
     autohide: bool,
-    action_builder: Option<Rc<dyn Fn(&mut Window, &mut Context<Self>) -> Button>>,
-    content_builder: Option<Rc<dyn Fn(&mut Window, &mut Context<Self>) -> AnyElement>>,
+    action_builder: Option<Rc<dyn Fn(&mut Self, &mut Window, &mut Context<Self>) -> Button>>,
+    content_builder: Option<Rc<dyn Fn(&mut Self, &mut Window, &mut Context<Self>) -> AnyElement>>,
     on_click: Option<Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>>,
     closing: bool,
 }
@@ -220,7 +220,7 @@ impl Notification {
     /// Set the action button of the notification.
     pub fn action<F>(mut self, action: F) -> Self
     where
-        F: Fn(&mut Window, &mut Context<Self>) -> Button + 'static,
+        F: Fn(&mut Self, &mut Window, &mut Context<Self>) -> Button + 'static,
     {
         self.action_builder = Some(Rc::new(action));
         self
@@ -228,6 +228,9 @@ impl Notification {
 
     /// Dismiss the notification.
     pub fn dismiss(&mut self, _: &mut Window, cx: &mut Context<Self>) {
+        if self.closing {
+            return;
+        }
         self.closing = true;
         cx.notify();
 
@@ -249,7 +252,7 @@ impl Notification {
     /// Set the content of the notification.
     pub fn content(
         mut self,
-        content: impl Fn(&mut Window, &mut Context<Self>) -> AnyElement + 'static,
+        content: impl Fn(&mut Self, &mut Window, &mut Context<Self>) -> AnyElement + 'static,
     ) -> Self {
         self.content_builder = Some(Rc::new(content));
         self
@@ -264,6 +267,9 @@ impl Styled for Notification {
 }
 impl Render for Notification {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let content = self.content_builder.clone().map(|builder| builder(self, window, cx));
+        let action = self.action_builder.clone().map(|builder| builder(self, window, cx).small().mr_3p5());
+
         let closing = self.closing;
         let icon = match self.type_ {
             None => self.icon.clone(),
@@ -300,12 +306,12 @@ impl Render for Notification {
                     .when_some(self.message.clone(), |this, message| {
                         this.child(div().text_sm().child(message))
                     })
-                    .when_some(self.content_builder.clone(), |this, child_builder| {
-                        this.child(child_builder(window, cx))
+                    .when_some(content, |this, content| {
+                        this.child(content)
                     }),
             )
-            .when_some(self.action_builder.clone(), |this, action_builder| {
-                this.child(action_builder(window, cx).small().mr_3p5())
+            .when_some(action, |this, action| {
+                this.child(action)
             })
             .when_some(self.on_click.clone(), |this, on_click| {
                 this.on_click(cx.listener(move |view, event, window, cx| {
