@@ -611,13 +611,11 @@ impl RenderOnce for Tab {
         self.base
             .id(self.ix)
             .flex()
-            .flex_wrap()
             .gap_1()
             .items_center()
             .flex_shrink_0()
             .overflow_hidden()
             .h(height)
-            .overflow_hidden()
             .text_color(tab_style.fg)
             .map(|this| match self.size {
                 Size::XSmall => this.text_xs(),
